@@ -4,10 +4,10 @@ import { setContext } from '@apollo/client/link/context';
 import omitDeep from 'omit-deep'
 import LENS_HUB_ABI from './ABI.json'
 
-export const LENS_HUB_CONTRACT = "0xDb46d1Dc155634FbC732f92E853b10B288AD5a1d"
+export const LENS_HUB_CONTRACT = "0x60Ae865ee4C725cd04353b5AAb364553f56ceF82"
 export const lensHub = new ethers.Contract(LENS_HUB_CONTRACT, LENS_HUB_ABI, getSigner())
 
-const API_URL = 'https://api.lens.dev'
+const API_URL = 'https://api-mumbai.lens.dev'
 
 // export const client = new ApolloClient({
 //   uri: API_URL,
@@ -35,7 +35,7 @@ export const client = new ApolloClient({
 })
 
 /* GraphQL queries and mutations */
-export async function createPostTypedDataMutation (request, token) {
+export async function createPostTypedDataMutation(request, token) {
   const result = await client.mutate({
     mutation: createPostTypedData,
     variables: {
@@ -49,6 +49,19 @@ export async function createPostTypedDataMutation (request, token) {
   })
   return result.data.createPostTypedData
 }
+
+export async function createSetDispatcherTypedDataMutation(request) {
+  console.log("request: ", request);
+  const result = await client.mutate({
+    mutation: createSetDispatcherTypedData,
+    variables: {
+      "profileId": request.profileId,
+    },
+  })
+
+  return result.data.createSetDispatcherTypedData
+};
+
 
 export const createPostTypedData = gql`
 mutation createPostTypedData($request: CreatePublicPostRequest!) {
@@ -82,6 +95,46 @@ mutation createPostTypedData($request: CreatePublicPostRequest!) {
   }
 }
 `
+
+export const checkDispatcher = gql`
+query Profile($profileId: ProfileId!) {
+  profile(request: { profileId: $profileId }) {
+    dispatcher {
+      address
+      canUseRelay
+    }
+  }
+}`
+
+export const createSetDispatcherTypedData = gql`
+mutation CreateSetDispatcherTypedData($profileId: ProfileId!) {
+  createSetDispatcherTypedData(request: {
+    profileId: $profileId
+  }) {
+    id
+    expiresAt
+    typedData {
+      types {
+        SetDispatcherWithSig {
+          name
+          type
+        }
+      }
+      domain {
+        name
+        chainId
+        version
+        verifyingContract
+      }
+      value {
+        nonce
+        deadline
+        profileId
+        dispatcher
+      }
+    }
+  }
+}`
 
 export const challenge = gql`
   query Challenge($address: EthereumAddress!) {
@@ -149,7 +202,7 @@ export const signedTypeData = (
   )
 }
 
-export function omit (object, name) {
+export function omit(object, name) {
   return omitDeep(object, name);
 };
 
@@ -159,6 +212,15 @@ export const splitSignature = (signature) => {
 
 export const signCreatePostTypedData = async (request, token) => {
   const result = await createPostTypedDataMutation(request, token)
+  const typedData = result.typedData
+  const signature = await signedTypeData(typedData.domain, typedData.types, typedData.value);
+  return { result, signature };
+}
+
+export const signSetDispatcherTypedData = async (request) => {
+  console.log("request", request)
+  const result = await createSetDispatcherTypedDataMutation(request)
+  console.log("result", result)
   const typedData = result.typedData
   const signature = await signedTypeData(typedData.domain, typedData.types, typedData.value);
   return { result, signature };
